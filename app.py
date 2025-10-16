@@ -49,10 +49,18 @@ LOGO_CANDIDATES = [
 ]
 LOGO_PATH = next((p for p in LOGO_CANDIDATES if p.exists()), None)
 
+# feature-safe image call
+def show_logo(path: str):
+    try:
+        st.image(path, use_container_width=True)   # new API
+    except TypeError:
+        st.image(path, use_column_width=True)      # old API fallback
+
 col_logo, col_text = st.columns([1, 5], vertical_alignment="center")
+
 with col_logo:
     if LOGO_PATH is not None:
-        st.image(str(LOGO_PATH), use_container_width=True)  # <-- updated
+        show_logo(str(LOGO_PATH))
     else:
         st.write("🧵")
 
