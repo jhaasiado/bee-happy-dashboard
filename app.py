@@ -38,6 +38,34 @@ def _coerce(df: pd.DataFrame) -> pd.DataFrame:
 
 # Load once; no uploader needed
 df0 = _coerce(load_data(DATA_PATH)).dropna(subset=["ds"])
+# --- Header: logo + intro + attribution ---
+LOGO_CANDIDATES = [
+    REPO_ROOT / "bhc-logo.png",
+    REPO_ROOT / "data" / "bhc-logo.png",
+    REPO_ROOT / "bhc-logo.webp",
+    REPO_ROOT / "data" / "bhc-logo.webp",
+    Path.cwd() / "bhc-logo.png",
+    Path.cwd() / "data" / "bhc-logo.png",
+]
+LOGO_PATH = next((p for p in LOGO_CANDIDATES if p.exists()), None)
+
+col_logo, col_text = st.columns([1, 5], vertical_alignment="center")
+with col_logo:
+    if LOGO_PATH is not None:
+        st.image(str(LOGO_PATH), use_container_width=True)  # <-- updated
+    else:
+        st.write("🧵")
+
+with col_text:
+    st.markdown("### Bee Happy Forecast Dashboard")
+    st.markdown(
+        "Track weekly actuals (`y`) and RandomForest forecasts (`y_hat`) with confidence bands "
+        "(`yhat_lower`, `yhat_upper`). Use filters to pick a SKU (Item × Variation), adjust the "
+        "**actuals context** and **forecast horizon**, and switch to **monthly** aggregation when needed."
+    )
+    st.caption("This demo is made by **Capstone Team 6** of MS in Data Science Part-Time B of the **Asian Institute of Management** for **Bee Happy Crafts**.")
+st.divider()
+
 
 # ---------------- Sidebar: windows & filters ----------------
 st.sidebar.header("Data Window")
@@ -51,7 +79,7 @@ df_preds_all = df0[df0["model"].astype(str) == "RandomForest"] if "model" in df0
 
 # Cluster filter
 cluster_vals = sorted(df0["cluster_km8"].dropna().unique().tolist()) if "cluster_km8" in df0.columns else []
-cluster_choice = st.sidebar.selectbox("Cluster (km8)", ["All"] + cluster_vals if cluster_vals else ["All"])
+cluster_choice = st.sidebar.selectbox("Cluster", ["All"] + cluster_vals if cluster_vals else ["All"])
 
 # Only SKUs with predictions
 only_with_preds = st.sidebar.checkbox("Only SKUs with predictions", value=True)
