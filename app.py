@@ -38,6 +38,24 @@ def _coerce(df: pd.DataFrame) -> pd.DataFrame:
 
 # Load once; no uploader needed
 df0 = _coerce(load_data(DATA_PATH)).dropna(subset=["ds"])
+
+# -------- Global date range (sidebar) --------
+st.sidebar.header("Date Range")
+
+_ds_min = pd.to_datetime(df0["ds"].min())
+_ds_max = pd.to_datetime(df0["ds"].max())
+
+date_lo, date_hi = st.sidebar.slider(
+    "Filter data between",
+    min_value=_ds_min.to_pydatetime(),
+    max_value=_ds_max.to_pydatetime(),
+    value=(_ds_min.to_pydatetime(), _ds_max.to_pydatetime()),
+    format="YYYY-MM-DD",
+)
+
+# Apply date mask globally
+df0 = df0[(df0["ds"] >= pd.to_datetime(date_lo)) & (df0["ds"] <= pd.to_datetime(date_hi))].copy()
+
 # --- Header: logo + intro + attribution ---
 LOGO_CANDIDATES = [
     REPO_ROOT / "bhc-logo.png",
@@ -216,6 +234,27 @@ def monthly_from_weekly_actuals(df_actual_weekly: pd.DataFrame) -> pd.DataFrame:
     g = tmp.groupby("month", as_index=False).agg(y=("y", "sum"))
     return g.rename(columns={"month": "ds"})
 
+def compute_totals(actuals_df: pd.DataFrame, preds_df: pd.DataFrame, Z: float = 1.96):
+    """Returns (hist_total, fcst_total, fcst_lo, fcst_hi) for the displayed window."""
+    hist_total = float(actuals_df["y"].sum()) if not actuals_df.empty else None
+
+    if preds_df.empty:
+        return hist_total, None, None, None
+
+    fcst_total = float(preds_df["y_hat"].sum())
+
+    # Combine CI correctly by summing variances implied by half-widths
+    fcst_lo = fcst_hi = None
+    if {"yhat_lower", "yhat_upper"}.issubset(preds_df.columns):
+        half = (preds_df["yhat_upper"] - preds_df["yhat_lower"]) / 2.0
+        var = (half / Z) ** 2
+        half_total = float(Z * np.sqrt(var.sum()))
+        fcst_lo = max(fcst_total - half_total, 0.0)
+        fcst_hi = fcst_total + half_total
+
+    return hist_total, fcst_total, fcst_lo, fcst_hi
+
+
 # Choose granularity
 if granularity == "Weekly":
     actuals = actuals_w[["ds", "y"]].sort_values("ds")
@@ -263,6 +302,30 @@ ax.legend(handles=handles, loc="upper left", frameon=True)
 
 fig.set_dpi(100)
 st.pyplot(fig, clear_figure=True)
+
+# --- Totals under the plot ---
+hist_total, fcst_total, fcst_lo, fcst_hi = compute_totals(actuals, preds, Z=Z)
+
+st.markdown("#### Totals for Selected Window")
+c1, c2, c3 = st.columns([1, 1, 1])
+
+with c1:
+    if hist_total is not None:
+        st.metric("Total Historical Orders", f"{hist_total:,.0f}")
+    else:
+        st.metric("Total Historical Orders", "—")
+
+with c2:
+    if fcst_total is not None:
+        st.metric("Total Forecasted Orders", f"{fcst_total:,.0f}")
+    else:
+        st.metric("Total Forecasted Orders", "—")
+
+with c3:
+    if show_ci and fcst_total is not None and fcst_lo is not None:
+        st.write(f"**95% CI (Forecast Total):** {fcst_lo:,.0f} – {fcst_hi:,.0f}")
+    else:
+        st.write(" ")
 
 # Peek
 with st.expander("Show current data"):
